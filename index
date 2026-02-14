@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Almanca Kilit</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px}
+        .container{background:#fff;border-radius:20px;padding:40px;max-width:500px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+        h1{text-align:center;color:#333;margin-bottom:30px}
+        .btn{width:100%;padding:15px;border:none;border-radius:10px;font-size:1.1em;cursor:pointer;margin:10px 0;transition:all 0.3s}
+        .btn-google{background:#4285f4;color:#fff}
+        .btn-google:hover{background:#3367d6;transform:translateY(-2px)}
+        .btn-primary{background:#667eea;color:#fff}
+        .btn-primary:hover{background:#5568d3}
+        .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:15px;margin:20px 0}
+        .stat-box{background:#f8f9fa;padding:15px;border-radius:10px;text-align:center}
+        .stat-value{font-size:1.8em;font-weight:bold;color:#667eea}
+        .stat-label{color:#666;font-size:0.9em}
+        .card{background:#f8f9fa;padding:30px;border-radius:15px;text-align:center;margin:20px 0}
+        .word{font-size:2em;color:#333;margin-bottom:20px;font-weight:bold}
+        input{width:100%;padding:15px;border:2px solid #ddd;border-radius:10px;font-size:1.1em;margin:10px 0}
+        input:focus{outline:none;border-color:#667eea}
+        .hidden{display:none}
+        .menu{display:flex;gap:10px;margin-bottom:20px}
+        .menu-btn{flex:1;padding:10px;background:#f8f9fa;border:none;border-radius:8px;cursor:pointer}
+        .menu-btn.active{background:#667eea;color:#fff}
+        .word-list{max-height:300px;overflow-y:auto}
+        .word-item{background:#f8f9fa;padding:15px;margin:5px 0;border-radius:8px;display:flex;justify-content:space-between}
+        .badge{background:#667eea;color:#fff;padding:5px 10px;border-radius:15px;font-size:0.8em}
+        .error{color:#dc3545;background:#f8d7da;padding:15px;border-radius:10px;margin:10px 0}
+        .success{color:#155724;background:#d4edda;padding:15px;border-radius:10px;margin:10px 0}
+    </style>
+</head>
+<body>
+    <div class="container" id="loginScreen">
+        <h1>🔒 Almanca Kilit</h1>
+        <p style="text-align:center;color:#666;margin-bottom:20px">GitHub Pages + Firebase</p>
+        <button class="btn btn-google" onclick="login()">Google ile Giriş Yap</button>
+        <div id="error"></div>
+    </div>
+
+    <div class="container hidden" id="appScreen">
+        <h1>🔒 Almanca Kilit</h1>
+        <div style="text-align:center;margin-bottom:20px">
+            <span id="userName"></span> | 
+            <button onclick="logout()" style="background:none;border:none;color:#667eea;cursor:pointer">Çıkış</button>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="totalWords">0</div>
+                <div class="stat-label">Kelime</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="dueWords">0</div>
+                <div class="stat-label">Tekrar</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="streak">0</div>
+                <div class="stat-label">Streak</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="xp">0</div>
+                <div class="stat-label">XP</div>
+            </div>
+        </div>
+
+        <div class="menu">
+            <button class="menu-btn active" onclick="showTab('study')">🎯 Çalış</button>
+            <button class="menu-btn" onclick="showTab('add')">➕ Ekle</button>
+            <button class="menu-btn" onclick="showTab('list')">📚 Liste</button>
+        </div>
+
+        <div id="studyTab">
+            <div class="card">
+                <div class="word" id="wordText">Hazır mısın?</div>
+                <input type="text" id="answer" class="hidden" placeholder="Cevabını yaz...">
+                <button class="btn btn-primary" id="actionBtn" onclick="startStudy()">🚀 BAŞLA</button>
+            </div>
+        </div>
+
+        <div id="addTab" class="hidden">
+            <input type="text" id="german" placeholder="Almanca (örn: Haus)">
+            <input type="text" id="turkish" placeholder="Türkçe (örn: Ev)">
+            <button class="btn btn-primary" onclick="addWord()">💾 KAYDET</button>
+            <button class="btn btn-primary" onclick="loadDefaults()" style="background:#28a745;margin-top:10px">📥 A1-A2 Yükle</button>
+        </div>
+
+        <div id="listTab" class="hidden">
+            <div class="word-list" id="wordList"></div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Config - SENİN PROJEN
+        const firebaseConfig = {
+            apiKey: "AIzaSyAxWw0-JNgC29YC-K2zq4T-bLe-xDaVI90",
+            authDomain: "beyinhack-4987e.firebaseapp.com",
+            projectId: "beyinhack-4987e",
+            storageBucket: "beyinhack-4987e.firebasestorage.app",
+            messagingSenderId: "877790972884",
+            appId: "1:877790972884:web:8b389745ae9efe4b9ba441"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        let words = [], current = null, userId = null;
+        let stats = {xp:0, streak:0, lastDate:null, today:0};
+
+        auth.onAuthStateChanged(user => {
+            if(user) {
+                userId = user.uid;
+                document.getElementById('userName').textContent = user.displayName || user.email;
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appScreen').classList.remove('hidden');
+                loadData();
+            }
+        });
+
+        function login() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).catch(err => {
+                document.getElementById('error').innerHTML = `<div class="error">Hata: ${err.message}</div>`;
+            });
+        }
+
+        function logout() {
+            auth.signOut();
+            location.reload();
+        }
+
+        async function loadData() {
+            const snap = await db.collection('users').doc(userId).collection('words').get();
+            words = snap.docs.map(d => ({
+                id: d.id,
+                ...d.data(),
+                nextReview: d.data().nextReview?.toMillis() || Date.now()
+            }));
+            updateStats();
+        }
+
+        function updateStats() {
+            const due = words.filter(w => w.nextReview <= Date.now());
+            document.getElementById('totalWords').textContent = words.length;
+            document.getElementById('dueWords').textContent = due.length;
+            document.getElementById('streak').textContent = stats.streak;
+            document.getElementById('xp').textContent = stats.xp;
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.getElementById('studyTab').classList.add('hidden');
+            document.getElementById('addTab').classList.add('hidden');
+            document.getElementById('listTab').classList.add('hidden');
+            document.getElementById(tab + 'Tab').classList.remove('hidden');
+            
+            if(tab === 'list') renderList();
+        }
+
+        function startStudy() {
+            const due = words.filter(w => w.nextReview <= Date.now()).sort((a,b) => a.nextReview - b.nextReview);
+            if(due.length === 0) {
+                document.getElementById('wordText').textContent = '🎉 Hepsi tamam!';
+                return;
+            }
+            current = due[0];
+            const isDe = Math.random() > 0.5;
+            document.getElementById('wordText').textContent = isDe ? current.german : current.turkish;
+            document.getElementById('answer').classList.remove('hidden');
+            document.getElementById('answer').value = '';
+            document.getElementById('answer').focus();
+            document.getElementById('actionBtn').textContent = '✓ KONTROL ET';
+            document.getElementById('actionBtn').onclick = checkAnswer;
+        }
+
+        function checkAnswer() {
+            const ans = document.getElementById('answer').value.trim().toLowerCase();
+            const correct = current.turkish.toLowerCase();
+            const ok = ans === correct.replace(/[.,!?]/g, '');
+            
+            document.getElementById('wordText').innerHTML = ok ? 
+                `✅ ${current.german} = ${current.turkish}` : 
+                `❌ Doğru: ${correct}`;
+            
+            document.getElementById('actionBtn').textContent = ok ? '🟢 İyi (4)' : '🔴 Tekrar (0)';
+            document.getElementById('actionBtn').onclick = () => rate(ok ? 4 : 0);
+        }
+
+        async function rate(q) {
+            let {interval=0, repetition=0, ef=2.5} = current;
+            ef = Math.max(1.3, ef + (0.1 - (5-q) * (0.08 + (5-q) * 0.02)));
+            
+            if(q < 3) {
+                repetition = 0;
+                interval = 1;
+            } else {
+                repetition++;
+                interval = repetition === 1 ? 1 : repetition === 2 ? 6 : Math.round(interval * ef);
+            }
+            
+            current.interval = interval;
+            current.repetition = repetition;
+            current.ef = ef;
+            current.nextReview = Date.now() + interval * 86400000;
+            
+            stats.xp += q === 0 ? 5 : 15;
+            
+            await db.collection('users').doc(userId).collection('words').doc(current.id).update({
+                interval, repetition, ef,
+                nextReview: firebase.firestore.Timestamp.fromMillis(current.nextReview)
+            });
+            
+            updateStats();
+            document.getElementById('answer').classList.add('hidden');
+            document.getElementById('actionBtn').textContent = '🚀 BAŞLA';
+            document.getElementById('actionBtn').onclick = startStudy;
+            startStudy();
+        }
+
+        async function addWord() {
+            const g = document.getElementById('german').value.trim();
+            const t = document.getElementById('turkish').value.trim();
+            if(!g || !t) return alert('Eksik!');
+            
+            const w = {
+                german: g, turkish: t, type: 'noun',
+                interval: 0, repetition: 0, ef: 2.5,
+                nextReview: firebase.firestore.Timestamp.fromMillis(Date.now())
+            };
+            
+            await db.collection('users').doc(userId).collection('words').add(w);
+            document.getElementById('german').value = '';
+            document.getElementById('turkish').value = '';
+            loadData();
+            alert('Eklendi!');
+        }
+
+        async function loadDefaults() {
+            const defs = [
+                {g:'Haus',t:'Ev'},{g:'Hund',t:'Köpek'},{g:'Katze',t:'Kedi'},
+                {g:'Wasser',t:'Su'},{g:'Brot',t:'Ekmek'},{g:'Freund',t:'Arkadaş'},
+                {g:'gehen',t:'Gitmek'},{g:'kommen',t:'Gelmek'},{g:'machen',t:'Yapmak'},
+                {g:'gut',t:'İyi'},{g:'schlecht',t:'Kötü'},{g:'groß',t:'Büyük'}
+            ];
+            
+            for(const d of defs) {
+                if(!words.find(x => x.german === d.g)) {
+                    await db.collection('users').doc(userId).collection('words').add({
+                        german: d.g, turkish: d.t, type: 'noun',
+                        interval: 0, repetition: 0, ef: 2.5,
+                        nextReview: firebase.firestore.Timestamp.fromMillis(Date.now())
+                    });
+                }
+            }
+            loadData();
+            alert('Yüklendi!');
+        }
+
+        function renderList() {
+            const list = document.getElementById('wordList');
+            list.innerHTML = words.map(w => `
+                <div class="word-item">
+                    <span><strong>${w.german}</strong> = ${w.turkish}</span>
+                    <span class="badge">${w.repetition || 0}</span>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
